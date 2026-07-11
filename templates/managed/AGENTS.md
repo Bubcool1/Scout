@@ -1,5 +1,9 @@
 # Scout project instructions
 
+## Repository boundary
+
+This checkout is the user's private Scout workspace and data repository. Keep CVs, profile and calibration data, opportunity trackers, reports, applications, chats, logs, and credentials here. Do not implement UI, server, installer, provider, template, or test changes in this workspace; application development belongs in the public Scout application repository. The installed application reads this workspace but is not itself a source repository.
+
 Scout is a local-first, AI-assisted opportunity finder. Before searching, scoring, tailoring a CV, preparing for an interview, or drafting outreach, read `workspace.json`, `profile/context.md`, and `profile/calibration.md`. They are the source of truth for the current user.
 
 ## Hard rules
