@@ -47,6 +47,7 @@ test('alpha action builds the pinned Wails host and publishes one combined manif
   assert.match(alpha, /libwebkit2gtk-4\.1-dev/);
   assert.match(alpha, /go test \.\/\.\.\./);
   assert.match(alpha, /checksums\.txt/);
+  assert.match(alpha, /-eq 5/);
   assert.match(alpha, /--prerelease/);
 });
 

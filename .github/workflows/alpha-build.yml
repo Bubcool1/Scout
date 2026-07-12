@@ -104,7 +104,8 @@ jobs:
       - name: Create one combined checksum manifest
         run: |
           cd release-assets
-          test "$(find . -maxdepth 1 -type f -name 'Scout-*' | wc -l)" -eq 4
+          # Windows + macOS arm64/x64 + Linux DEB + portable Linux tarball.
+          test "$(find . -maxdepth 1 -type f -name 'Scout-*' | wc -l)" -eq 5
           sha256sum Scout-* > checksums.txt
       - name: Publish alpha release
         env: { GH_TOKEN: "${{ github.token }}" }
