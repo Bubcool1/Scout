@@ -4,9 +4,10 @@ import test from 'node:test';
 
 const host = fs.readFileSync(new URL('../desktop/cmd/scout-host/main.go', import.meta.url), 'utf8');
 const installer = fs.readFileSync(new URL('../installer/Scout.iss', import.meta.url), 'utf8');
+const index = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8');
 
 test('Windows host owns tray lifecycle and named runtime', () => {
-  for (const label of ['Open Scout', 'Check for updates', 'Restart Scout', 'Settings', 'Quit Scout', 'quit and keep scheduled scans running', 'turn off scheduled scans, then quit', 'Cancel — keep Scout open']) assert.match(host, new RegExp(label));
+  for (const label of ['Open Scout', 'Check for updates', 'Restart Scout', 'Settings', 'Quit Scout', 'Scheduled scans can continue after Scout closes.', 'Yes, keep scheduled scans running', 'Yes, turn off scheduled scans', 'No, cancel']) assert.match(host, new RegExp(label));
   assert.match(host, /SingleInstance/);
   assert.match(host, /ProxyHandler/);
   assert.match(host, /go:embed scout-icon\.ico/);
@@ -19,8 +20,9 @@ test('Windows host owns tray lifecycle and named runtime', () => {
   assert.doesNotMatch(installer, /PowerShell|ScoutLauncher\.ps1/);
 });
 
-test('quit confirmation uses Windows-supported response IDs and waits to disable schedules', () => {
-  for (const label of ['AddButton("Yes")', 'AddButton("No")', 'AddButton("Cancel")', 'disableSchedules(sup.Port)', 'client.Do(req)', 'resp.StatusCode < 200']) assert.match(host, new RegExp(label.replace(/[()]/g, '\\$&')));
+test('quit confirmation uses the Scout webview and private host bridge', () => {
+  for (const label of ['showQuitSheet(mainWindow)', '/api/host/quit', '/v1/window/quit', 'control.onQuit = app.Quit', 'document.documentElement.append(sheet)', "setProperty('z-index', '2147483647', 'important')", 'event.stopPropagation()', 'type="button"', 'disableSchedule']) assert.match(host, new RegExp(label.replace(/[()]/g, '\\$&')));
+  assert.match(index, /<script type="module" src="\/wails\/runtime\.js"/);
 });
 
 test('the native host embeds the established favicon unchanged', () => {

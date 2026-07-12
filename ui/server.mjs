@@ -19,7 +19,7 @@ import { extractCvText } from './lib/cvImport.mjs';
 import { setupReadiness } from './lib/setupReadiness.mjs';
 import { loadDeviceSettings, pendingDeviceSections, saveDeviceSettings, setWindowsStartup } from './lib/deviceSettings.mjs';
 import { checkForUpdate } from './lib/updates.mjs';
-import { hostControlConfig, hostUpdate } from './lib/hostControl.mjs';
+import { hostControlConfig, hostUpdate, hostWindowCommand } from './lib/hostControl.mjs';
 import { completedWorkspaceSections, pendingWorkspaceSections } from './lib/setupSections.mjs';
 import { loadEnv, saveEnv } from './lib/env.mjs';
 import {
@@ -562,6 +562,23 @@ routes['POST /api/updates/check'] = routes['POST /api/update/check'];
 routes['POST /api/updates/install'] = async (req, res, body) => {
   const b = parseBody(body); if (!b) return replyJson(res, 400, { error: 'bad json' });
   try { return replyJson(res, 200, await hostUpdate('/install', b)); }
+  catch (e) { return replyJson(res, 503, { error: e.message }); }
+};
+
+// This route is only injected by the Wails host's in-dashboard quit sheet.
+// Node forwards it with the private startup token; the browser never sees it.
+routes['POST /api/host/quit'] = async (req, res, body) => {
+  const b = parseBody(body); if (!b) return replyJson(res, 400, { error: 'bad json' });
+  try {
+    if (b.disableSchedule) {
+      const result = removeSchedule();
+      if (!result.ok) return replyJson(res, 500, result);
+      const config = loadWorkspaceConfig(WORKSPACE_ROOT);
+      config.schedule = { ...config.schedule, enabled: false };
+      writeWorkspaceConfig(WORKSPACE_ROOT, config);
+    }
+    return replyJson(res, 202, await hostWindowCommand('/quit'));
+  }
   catch (e) { return replyJson(res, 503, { error: e.message }); }
 };
 

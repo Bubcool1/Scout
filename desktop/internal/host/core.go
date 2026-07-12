@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -56,13 +57,23 @@ func (s *Supervisor) WaitReady(ctx context.Context, timeout time.Duration) error
 	defer tick.Stop()
 	client := &http.Client{Timeout: 900 * time.Millisecond}
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d/api/app-info", s.Port)
+	expectedAppRoot := filepath.Clean(filepath.Join(s.Paths.Root, "app"))
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		r, err := client.Do(req)
 		if err == nil {
+			var info struct {
+				AppRoot string `json:"appRoot"`
+			}
+			decodeErr := json.NewDecoder(r.Body).Decode(&info)
 			r.Body.Close()
-			if r.StatusCode == 200 {
-				return nil
+			if r.StatusCode == 200 && decodeErr == nil {
+				actual, _ := filepath.Abs(info.AppRoot)
+				expected, _ := filepath.Abs(expectedAppRoot)
+				if filepath.Clean(actual) == filepath.Clean(expected) {
+					return nil
+				}
+				return fmt.Errorf("another Scout installation is already serving port %d (%s)", s.Port, actual)
 			}
 		}
 		select {

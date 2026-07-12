@@ -18,3 +18,15 @@ export async function hostUpdate(path, body = {}, { env = process.env, fetchFn =
   if (!response.ok) throw new Error(`Desktop update host returned ${response.status}`);
   return response.json();
 }
+
+export async function hostWindowCommand(path, body = {}, { env = process.env, fetchFn = globalThis.fetch } = {}) {
+  const config = hostControlConfig(env);
+  if (!config) throw new Error('Desktop host is unavailable');
+  if (path !== '/quit') throw new Error('invalid host window route');
+  const response = await fetchFn(`${config.url}/v1/window${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-scout-host-token': config.token },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Desktop host returned ${response.status}`);
+  return response.json();
+}

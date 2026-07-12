@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"github.com/oliver-hitchings/scout/desktop/internal/host"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -14,7 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 )
 
@@ -30,7 +29,7 @@ func main() {
 	if os.Getenv("SCOUT_ROOT") != "" {
 		root = os.Getenv("SCOUT_ROOT")
 	}
-	sup := &host.Supervisor{Paths: host.InstalledPaths(root)}
+	sup := &host.Supervisor{Paths: host.InstalledPaths(root), Port: configuredPort()}
 	control := newControl(sup)
 	sup.ControlURL = control.URL
 	if err := sup.Start(context.Background()); err != nil {
@@ -52,26 +51,12 @@ func main() {
 	// Settings lives in the existing dashboard; do not replace its URL or API.
 	menu.Add("Settings").OnClick(func(*application.Context) { mainWindow.Show().Focus() })
 	menu.AddSeparator()
-	menu.Add("Quit Scout").OnClick(func(*application.Context) {
-		// Windows' native MessageBox supports only Yes/No/Cancel result IDs. Keep
-		// those labels so every platform invokes the intended callback, and make
-		// the consequence of each choice explicit in the message.
-		quit := app.Dialog.Question().SetTitle("Quit Scout?").SetMessage("Scheduled scans can continue after Scout closes.\n\nYes — quit and keep scheduled scans running\nNo — turn off scheduled scans, then quit\nCancel — keep Scout open").AttachToWindow(mainWindow)
-		quit.AddButton("Yes").OnClick(func() { app.Quit() }).SetAsDefault()
-		quit.AddButton("No").OnClick(func() {
-			if err := disableSchedules(sup.Port); err != nil {
-				app.Dialog.Error().SetTitle("Could not turn off scheduled scans").SetMessage("Scout is still open so your schedule is not changed.\n\n" + err.Error()).AttachToWindow(mainWindow).Show()
-				return
-			}
-			app.Quit()
-		})
-		quit.AddButton("Cancel").SetAsCancel()
-		quit.Show()
-	})
+	menu.Add("Quit Scout").OnClick(func(*application.Context) { showQuitSheet(mainWindow) })
 	tray.SetTooltip("Scout")
 	tray.SetIcon(scoutIcon)
 	tray.SetMenu(menu)
 	tray.OnClick(func() { mainWindow.Show().Focus() })
+	control.onQuit = app.Quit
 	app.OnShutdown(func() { sup.Stop(); control.Close() })
 	if err := app.Run(); err != nil {
 		log.Print(err)
@@ -89,10 +74,21 @@ func hasArg(want string) bool {
 	return false
 }
 
+// SCOUT_PORT is intentionally an opt-in developer/smoke-test escape hatch.
+// Installed desktop launches retain the stable loopback default (8459).
+func configuredPort() int {
+	port, err := strconv.Atoi(os.Getenv("SCOUT_PORT"))
+	if err == nil && port > 0 && port < 65536 {
+		return port
+	}
+	return 8459
+}
+
 type controlServer struct {
 	URL    string
 	server *http.Server
 	token  string
+	onQuit func()
 }
 
 func newControl(s *host.Supervisor) *controlServer {
@@ -118,6 +114,18 @@ func newControl(s *host.Supervisor) *controlServer {
 		// GitHub-release asset and verified its exact checksums.txt entry.
 		http.Error(w, "no verified update is staged", http.StatusConflict)
 	})
+	mux.HandleFunc("/v1/window/quit", func(w http.ResponseWriter, r *http.Request) {
+		if !c.authorised(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"accepted":true}`))
+		if c.onQuit != nil {
+			go func() { time.Sleep(100 * time.Millisecond); c.onQuit() }()
+		}
+	})
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	c.URL = "http://" + l.Addr().String()
 	c.server = &http.Server{Handler: mux}
@@ -136,18 +144,21 @@ func (c *controlServer) Close() {
 	c.server.Shutdown(ctx)
 }
 
-func disableSchedules(port int) error {
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/api/schedule", port), strings.NewReader(`{"action":"remove"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", port))
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("could not contact Scout: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Scout returned %s", resp.Status)
-	}
-	return nil
+func showQuitSheet(window *application.WebviewWindow) {
+	window.ExecJS(`(() => {
+	  document.getElementById('scout-host-quit-sheet')?.remove();
+	  const sheet = document.createElement('div'); sheet.id = 'scout-host-quit-sheet';
+	  sheet.innerHTML = '<div role="dialog" aria-modal="true" aria-labelledby="scout-host-quit-title" style="width:min(440px,calc(100vw - 32px));background:#172033;color:#f8fafc;border:1px solid #475569;border-radius:16px;padding:24px;box-shadow:0 24px 64px #0008;font:16px system-ui,-apple-system,Segoe UI,sans-serif"><h2 id="scout-host-quit-title" style="margin:0 0 10px;font-size:24px">Quit Scout</h2><p style="margin:0 0 22px;color:#cbd5e1;line-height:1.5">Scheduled scans can continue after Scout closes.</p><p id="scout-host-quit-error" role="alert" style="display:none;color:#fecaca;margin:0 0 14px"></p><div style="display:grid;gap:10px"><button type="button" data-choice="keep">Yes, keep scheduled scans running</button><button type="button" data-choice="disable">Yes, turn off scheduled scans</button><button type="button" data-choice="cancel">No, cancel</button></div></div>';
+	  // Attach to documentElement rather than a dashboard container: setup and
+	  // onboarding create their own stacking contexts, but quit must always win.
+	  Object.assign(sheet.style, {position:'fixed',inset:'0',display:'grid',placeItems:'center',background:'rgba(15,23,42,.72)',padding:'16px',isolation:'isolate',pointerEvents:'auto'});
+	  sheet.style.setProperty('z-index', '2147483647', 'important');
+	  sheet.style.setProperty('position', 'fixed', 'important');
+	  sheet.querySelectorAll('button').forEach((button) => Object.assign(button.style, {padding:'11px 14px',borderRadius:'9px',border:'1px solid #64748b',background:'#263751',color:'#f8fafc',font:'inherit',textAlign:'left',cursor:'pointer'}));
+	  document.documentElement.append(sheet);
+	  const error = sheet.querySelector('#scout-host-quit-error');
+	  const fail = (message) => { error.textContent = message; error.style.display = 'block'; };
+	  const requestQuit = async (disableSchedule) => { const response = await fetch('/api/host/quit', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({disableSchedule})}); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Scout could not quit'); };
+	  sheet.addEventListener('click', async (event) => { event.preventDefault(); event.stopPropagation(); const choice = event.target?.dataset?.choice; if (!choice) return; if (choice === 'cancel') { sheet.remove(); return; } try { await requestQuit(choice === 'disable'); } catch (err) { fail(err.message || 'Something went wrong'); } });
+	})()`)
 }
