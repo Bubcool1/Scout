@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const workflow = fs.readFileSync(new URL('../.github/workflows/windows-release.yml', import.meta.url), 'utf8');
 const alpha = fs.readFileSync(new URL('../.github/workflows/alpha-build.yml', import.meta.url), 'utf8');
+const ci = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
 
 test('tagged release workflow validates version and requires private markers', () => {
   assert.match(workflow, /Tag does not match package version/);
@@ -47,4 +48,9 @@ test('alpha action builds the pinned Wails host and publishes one combined manif
   assert.match(alpha, /go test \.\/\.\.\./);
   assert.match(alpha, /checksums\.txt/);
   assert.match(alpha, /--prerelease/);
+});
+
+test('fork CI runs the release audit without requiring unavailable private markers', () => {
+  assert.match(ci, /SCOUT_RELEASE_MARKERS != '' && '--require-markers'/);
+  assert.match(ci, /SCOUT_RELEASE_MARKERS/);
 });

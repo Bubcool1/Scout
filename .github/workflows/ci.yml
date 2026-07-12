@@ -30,6 +30,9 @@ jobs:
       - name: Verify release staging
         run: node tools/build-release.mjs --stage-only
       - name: Audit staged public tree with required private markers
-        run: npm run release:audit -- --root dist/release/stage --stage --require-markers
+        # Forks cannot access the maintainer's private marker secret. They still
+        # run the structural/secret audit; protected upstream CI additionally
+        # requires the configured personal markers.
+        run: npm run release:audit -- --root dist/release/stage --stage ${{ secrets.SCOUT_RELEASE_MARKERS != '' && '--require-markers' || '' }}
         env:
           SCOUT_RELEASE_MARKERS: ${{ secrets.SCOUT_RELEASE_MARKERS }}
