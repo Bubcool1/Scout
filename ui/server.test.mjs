@@ -149,3 +149,33 @@ test('daily schedule is blocked before a healthy supervised scan', async () => {
   assert.equal(response.status, 409);
   assert.match(JSON.parse(response.text).error, /healthy supervised scan/i);
 });
+
+test('legacy CV downloads require a hash-bound explicit override', async () => {
+  const slug = 'synthetic-quality';
+  const app = path.join(testWorkspace, 'applications', slug);
+  fs.mkdirSync(app, { recursive: true });
+  fs.writeFileSync(path.join(app, 'cv.typ'), '#show: cv.with(name: "Example")\n');
+  fs.writeFileSync(path.join(app, 'cv.pdf'), 'synthetic-pdf');
+
+  const qualityResponse = await request({ path: `/api/cv/quality?slug=${slug}` });
+  assert.equal(qualityResponse.status, 200);
+  const quality = JSON.parse(qualityResponse.text);
+  assert.equal(quality.status, 'legacy');
+
+  const denied = await request({ path: `/api/cv/pdf?slug=${slug}&download=1` });
+  assert.equal(denied.status, 409);
+  assert.equal(JSON.parse(denied.text).overridable, true);
+
+  const host = `127.0.0.1:${port}`;
+  const accepted = await request({
+    method: 'POST', path: '/api/cv/quality/override',
+    headers: { host, origin: `http://${host}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ slug, cvSha256: quality.cvSha256 }),
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal(JSON.parse(accepted.text).status, 'overridden');
+
+  const downloaded = await request({ path: `/api/cv/pdf?slug=${slug}&download=1` });
+  assert.equal(downloaded.status, 200);
+  assert.equal(downloaded.text, 'synthetic-pdf');
+});

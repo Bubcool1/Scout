@@ -17,6 +17,7 @@ Scout `0.1.x` is a cross-platform public beta. Windows SmartScreen and macOS Gat
 - Uses either the Codex CLI or Claude Code as the AI provider; a second provider is optional.
 - Imports selectable text from PDF, DOCX, Markdown, or plain-text CVs.
 - Interviews you to build a factual profile, configurable search lanes, exclusions, and a 100-point scoring rubric.
+- Offers optional Google XYZ evidence questions and a separate natural-voice review when tailoring a CV.
 - Builds searches from the CV and preferences you explicitly approve; it does not inspect unrelated AI conversations or provider history.
 - Searches configured ATS boards and public sources. Adzuna is optional.
 - Tracks evidence, verdicts, follow-ups, applications, and dated reports in a private local Git repository.
@@ -71,6 +72,7 @@ See [Privacy and Data](docs/PRIVACY.md) and [Configuration](docs/CONFIGURATION.m
 scout doctor [--workspace PATH]
 scout workspace init [--workspace PATH]
 scout workspace migrate --from PATH --to PATH
+scout cv quality <application-slug> [--workspace PATH]
 scout scan --provider codex|claude --mode primary|second-pass
 scout schedule install|status|remove|run-now
 ```
@@ -102,6 +104,7 @@ Open `http://127.0.0.1:8459`. Use a synthetic workspace for development and neve
 - [AI-assisted setup and retuning](docs/AI_SETUP.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Privacy and data handling](docs/PRIVACY.md)
+- [CV evidence and quality](docs/CV_QUALITY.md)
 - [Codex and Claude providers](docs/PROVIDERS.md)
 - [Adzuna and other sources](docs/ADZUNA_AND_SOURCES.md)
 - [Scheduled scans](docs/AUTOMATION.md)

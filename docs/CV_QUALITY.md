@@ -1,0 +1,46 @@
+# CV Evidence and Quality
+
+When creating a tailored CV, Scout recommends Google XYZ for achievement bullets and a separate natural-voice review. Both are per-CV options and may be disabled before opening the job chat.
+
+## Evidence interview
+
+With XYZ enabled, the provider first compares the advert with `cv/master-cv.md`. It asks only for a missing accomplishment (X), confirmed quantitative or qualitative outcome (Y), or method (Z), one question per turn. Each question explains the prospective bullet and offers `Skip` and `Finish questions`. Missing metrics are never guessed.
+
+## Private evidence record
+
+`applications/<slug>/cv-evidence.json` uses schema version 1:
+
+```json
+{
+  "schemaVersion": 1,
+  "opportunityId": "example-engineer-2026-07",
+  "options": { "xyz": true, "humanize": true },
+  "questions": [
+    {
+      "id": "q1",
+      "question": "What changed as a result?",
+      "answer": "Reduced build time by 30%.",
+      "status": "answered"
+    }
+  ],
+  "bullets": [
+    {
+      "text": "Reduced build time by 30% by introducing a reusable test fixture.",
+      "kind": "achievement",
+      "evidence": [{ "source": "question", "reference": "q1" }],
+      "xyz": { "x": "Reduced build time", "y": "30%", "z": "Introduced a reusable test fixture" }
+    }
+  ],
+  "voiceReview": { "completed": true, "summary": "Removed generic wording.", "changes": [] }
+}
+```
+
+Every visible Typst bullet must have an exact record and at least one evidence source. Job adverts guide relevance but are not evidence of candidate experience.
+
+## Quality and downloads
+
+Run `scout cv quality <slug>` to compile the PDF and write `cv-quality.json`. The report contains the CV source hash, enabled options, issues and any explicit draft override. Editing the source invalidates both the report and override.
+
+Compilation failures, visible placeholders and unsupported bullets block download. Natural-voice and XYZ findings keep the CV labelled Draft but can be explicitly accepted. Existing CVs without these records are treated as legacy drafts and are not modified automatically.
+
+Natural-voice review improves authenticity and readability. It is not designed to evade AI-detection systems.

@@ -22,3 +22,8 @@ test('Codex and Claude scan skills keep the same operational protocol', () => {
     normalise(read('.claude/skills/scan/SKILL.md')),
   );
 });
+
+test('packaged, Codex and Claude tailor skills stay identical', () => {
+  assert.equal(read('skills/builtin/tailor/SKILL.md'), read('.agents/skills/tailor/SKILL.md'));
+  assert.equal(read('skills/builtin/tailor/SKILL.md'), read('.claude/skills/tailor/SKILL.md'));
+});

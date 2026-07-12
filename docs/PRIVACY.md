@@ -13,6 +13,8 @@ Application files install under `%LOCALAPPDATA%\Programs\Scout` on Windows, `/Ap
 
 Provider login credentials remain in provider-owned storage. Scout must never copy workspace content into its application repository.
 
+Tailored application folders may include `cv-evidence.json` and `cv-quality.json`. These private files record the selected CV methods, user-confirmed answers, per-bullet evidence references, quality findings and any explicit draft override. They remain in the workspace and may contain career details that were not present in the original imported CV.
+
 ## Network boundaries
 
 - AI-assisted setup, chat and scans send necessary context to Codex or Claude under that provider's terms and account controls.

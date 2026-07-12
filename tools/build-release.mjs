@@ -28,6 +28,7 @@ export const RELEASE_FILES = Object.freeze([
   { source: 'docs/AI_SETUP.md', target: 'docs/AI_SETUP.md' },
   { source: 'docs/CONFIGURATION.md', target: 'docs/CONFIGURATION.md' },
   { source: 'docs/PRIVACY.md', target: 'docs/PRIVACY.md' },
+  { source: 'docs/CV_QUALITY.md', target: 'docs/CV_QUALITY.md' },
   { source: 'docs/PROVIDERS.md', target: 'docs/PROVIDERS.md' },
   { source: 'docs/ADZUNA_AND_SOURCES.md', target: 'docs/ADZUNA_AND_SOURCES.md' },
   { source: 'docs/AUTOMATION.md', target: 'docs/AUTOMATION.md' },
