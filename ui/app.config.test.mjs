@@ -23,6 +23,14 @@ function loadScout() {
   return { scout: context.window.Scout, context };
 }
 
+test('custom CV recommendations are preselected but remain optional', () => {
+  const html = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="cv-option-xyz"[^>]*checked/);
+  assert.match(html, /id="cv-option-humanize"[^>]*checked/);
+  assert.match(html, /recommends both options, but they are optional/i);
+  assert.match(html, /app\.js\?v=beta-9/);
+});
+
 test('configured categories drive labels and legacy category mapping', () => {
   const { scout } = loadScout();
   scout.state.data = {

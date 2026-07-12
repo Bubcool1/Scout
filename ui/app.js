@@ -54,6 +54,7 @@ const Scout = {
     commute: { mode: 'either', maxMinutes: '180', includeUnknown: true },
   },
   cvState: { path: null, slug: null, opportunityId: null, dirty: false },
+  cvOptionsOpportunityId: null,
   cvPreviewZoom: 'page-width',
   chat: null,
   chatOpenSeq: 0,
@@ -649,7 +650,7 @@ const Scout = {
         <button class="act" onclick="Scout.rejectOpportunity(${idArg})">mark rejected</button>
         ${hasCv
           ? `<button class="act" onclick="Scout.seeCv(${slugArg},${idArg})">see custom CV</button>`
-          : `<button class="act bridge" onclick="Scout.openChat(${idArg},'cv')">create custom CV</button>`}
+          : `<button class="act bridge" onclick="Scout.chooseCvOptions(${idArg})">create custom CV</button>`}
         ${hasOutreach
           ? `<button class="act" onclick="Scout.seeCoverLetter(${slugArg})">see cover letter</button>`
           : `<button class="act bridge" onclick="Scout.openChat(${idArg},'coverLetter')">create custom cover letter</button>`}
@@ -716,6 +717,29 @@ const Scout = {
     this.openCv(`applications/${slug}/outreach.md`, null);
   },
 
+  chooseCvOptions(id) {
+    this.cvOptionsOpportunityId = id;
+    document.getElementById('cv-option-xyz').checked = true;
+    document.getElementById('cv-option-humanize').checked = true;
+    document.getElementById('cv-options-overlay').classList.remove('hidden');
+  },
+
+  closeCvOptions() {
+    this.cvOptionsOpportunityId = null;
+    document.getElementById('cv-options-overlay').classList.add('hidden');
+  },
+
+  startCvFromOptions() {
+    const id = this.cvOptionsOpportunityId;
+    if (!id) return this.closeCvOptions();
+    const cvOptions = {
+      xyz: document.getElementById('cv-option-xyz').checked,
+      humanize: document.getElementById('cv-option-humanize').checked,
+    };
+    this.closeCvOptions();
+    this.openChat(id, 'cv', cvOptions);
+  },
+
   async renderCv() {
     const list = await this.api('/api/cv');
     const el = document.getElementById('tab-cv');
@@ -734,10 +758,11 @@ const Scout = {
         <section class="cv-editor-panel">
           <div class="label"><span id="cv-editing">select a file</span> <span id="cv-dirty" style="color:var(--warn)"></span></div>
           <textarea id="cv-text" class="cv-source" oninput="Scout.cvState.dirty=true;document.getElementById('cv-dirty').textContent='unsaved'"></textarea>
-          <div class="controls" style="flex-wrap:wrap;margin-top:6px">
-            <button class="act" onclick="Scout.saveCv()">save + render</button>
-            <button class="act" onclick="Scout.downloadCv()">download PDF</button>
-          </div>
+           <div class="controls" style="flex-wrap:wrap;margin-top:6px">
+             <button class="act" onclick="Scout.saveCv()">save + render</button>
+             <button class="act" onclick="Scout.downloadCv()">download PDF</button>
+           </div>
+           <div id="cv-quality" class="cv-quality"><div class="meta">Select a tailored CV to see its quality review.</div></div>
           <div class="cv-chat-request">
             <div class="label">request changes through the job chat</div>
             <div class="meta">This opens the same job-specific Codex or Claude conversation used to create the CV. Your request is placed in the message box for review; nothing is sent until you press Send in the chat drawer.</div>
@@ -814,6 +839,48 @@ const Scout = {
     } catch (e) {
       preview.innerHTML = `<div class="cv-preview-error">Preview could not load: ${this.esc(e.message)}</div>`;
     }
+    await this.refreshCvQuality(slug);
+  },
+
+  async refreshCvQuality(slug) {
+    const panel = document.getElementById('cv-quality');
+    if (!panel || !slug) return;
+    let quality;
+    try { quality = await this.api(`/api/cv/quality?slug=${encodeURIComponent(slug)}`); }
+    catch (e) { quality = { status: 'invalid', error: e.message }; }
+    if (quality.error) {
+      panel.className = 'cv-quality invalid';
+      panel.innerHTML = `<b>Quality review unavailable</b><div class="meta">${this.esc(quality.error)}</div>`;
+      return;
+    }
+    const status = quality.status || (quality.pass ? 'ready' : 'draft');
+    const issues = [...(quality.blocking || []), ...(quality.warnings || [])];
+    const optionText = quality.options
+      ? `XYZ ${quality.options.xyz ? 'on' : 'off'} · natural voice ${quality.options.humanize ? 'on' : 'off'}`
+      : 'Legacy CV · review options were not recorded';
+    panel.className = `cv-quality ${this.esc(status)}`;
+    panel.innerHTML = `<div class="label">CV quality</div><b>${this.esc(status === 'ready' ? 'Ready' : status === 'overridden' ? 'Draft accepted' : 'Draft')}</b>
+      <div class="meta">${this.esc(optionText)}</div>
+      ${issues.length ? `<ul>${issues.map((entry) => `<li>${this.esc(entry.message)}</li>`).join('')}</ul>` : '<div class="meta">All enabled checks passed.</div>'}
+      <div class="controls" style="flex-wrap:wrap;margin-top:8px">
+        <button class="act" onclick="Scout.runCvQualityReview()">run quality review</button>
+        ${this.cvState.opportunityId ? '<button class="act bridge" onclick="Scout.reviewEvidenceForMaster()">review answers for master CV</button>' : ''}
+      </div>`;
+    this.cvState.quality = quality;
+  },
+
+  async runCvQualityReview() {
+    if (!this.cvState.slug) return alert('Open a tailored CV first.');
+    const result = await this.api('/api/cv/quality', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ slug: this.cvState.slug }),
+    });
+    if (result.error) alert(`Quality review failed: ${result.error}`);
+    await this.refreshCvQuality(this.cvState.slug);
+  },
+
+  reviewEvidenceForMaster() {
+    if (!this.cvState.opportunityId) return alert('Open this CV from its opportunity card first.');
+    this.openChat(this.cvState.opportunityId, 'reuseEvidence');
   },
 
   showPdf(slug) {
@@ -844,10 +911,23 @@ const Scout = {
     window.open(url, '_blank', 'noopener');
   },
 
-  downloadCv() {
+  async downloadCv() {
     if (!this.cvState.slug) return alert('Open a tailored (application) CV, then save + render first.');
+    let quality = await this.api(`/api/cv/quality?slug=${encodeURIComponent(this.cvState.slug)}`);
+    if (quality.error) return alert(`Could not check CV quality: ${quality.error}`);
+    if (!['ready', 'overridden'].includes(quality.status)) {
+      if ((quality.blocking || []).length) return alert(`This CV cannot be downloaded yet:\n\n${quality.blocking.map((entry) => entry.message).join('\n')}`);
+      if (!confirm('This CV is still labelled Draft. Use this draft anyway?')) return;
+      const cvSha256 = quality.currentCvSha256 || quality.cvSha256;
+      quality = await this.api('/api/cv/quality/override', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: this.cvState.slug, cvSha256 }),
+      });
+      if (quality.error) return alert(`Could not accept this draft: ${quality.error}`);
+      await this.refreshCvQuality(this.cvState.slug);
+    }
     const a = document.createElement('a');
-    a.href = `/api/cv/pdf?slug=${encodeURIComponent(this.cvState.slug)}&t=${Date.now()}`;
+    a.href = `/api/cv/pdf?slug=${encodeURIComponent(this.cvState.slug)}&download=1&t=${Date.now()}`;
     a.download = `${this.cvState.slug}-cv.pdf`;
     document.body.appendChild(a);
     a.click();
@@ -856,7 +936,7 @@ const Scout = {
 
   // --- Embedded chat drawer ---
 
-  async openChat(id, prefillKey = 'ask') {
+  async openChat(id, prefillKey = 'ask', cvOptions = null) {
     const previous = this.chat;
     if (previous && previous.streaming) {
       if (previous.id === id) {
@@ -869,7 +949,10 @@ const Scout = {
     if (previous?.pollTimer) clearTimeout(previous.pollTimer);
     const openSeq = ++this.chatOpenSeq;
     let r;
-    try { r = await this.api(`/api/chat?id=${encodeURIComponent(id)}`); }
+    const optionQuery = cvOptions
+      ? `&xyz=${cvOptions.xyz ? '1' : '0'}&humanize=${cvOptions.humanize ? '1' : '0'}`
+      : '';
+    try { r = await this.api(`/api/chat?id=${encodeURIComponent(id)}${optionQuery}`); }
     catch (e) {
       if (openSeq === this.chatOpenSeq) alert(`Could not open chat: ${e.message}`);
       return;

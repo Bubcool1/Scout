@@ -14,6 +14,7 @@ import { fetchHiringCafe } from '../ui/lib/hiringCafe.mjs';
 import { loadEnv } from '../ui/lib/env.mjs';
 import { providerStatus } from '../ui/lib/providers.mjs';
 import { isMainModule } from '../ui/lib/mainModule.mjs';
+import { runCvQuality } from '../ui/lib/cvQuality.mjs';
 import { registerDailySchedule, registerUnixSchedule, removeSchedule, runScheduledNow, scheduleStatus, schedulerRegistrationScript } from '../ui/lib/scheduler.mjs';
 import {
   loadWorkspaceConfig, resolveWorkspaceRoot, seedWorkspace as seedWorkspaceFiles,
@@ -178,6 +179,17 @@ async function main() {
     if (!result.ok) process.exitCode = 1;
     return;
   }
+  if (command === 'cv') {
+    const action = argv[1] || 'quality';
+    if (action !== 'quality') throw new Error('cv action must be quality');
+    const slug = argv[2];
+    if (!slug) throw new Error('cv quality requires an application slug');
+    const config = loadWorkspaceConfig(root);
+    const result = runCvQuality(root, slug, { locale: config.locale });
+    print(result);
+    if (!result.pass) process.exitCode = 1;
+    return;
+  }
   if (command === 'lock') {
     const action = argv[1] || 'status';
     if (action === 'acquire') return print(acquireScanLock(root, { agent: argv[2], mode: argv[3] }));
@@ -227,7 +239,7 @@ async function main() {
       return print(installSchedule(root, argValue('--time', argv) || config.schedule?.time || '07:30', argValue('--provider', argv) || config.ai?.provider));
     }
   }
-  print(`Scout CLI\n\nCommands:\n  doctor [--workspace PATH]\n  workspace init|migrate [--from PATH] [--to PATH]\n  lock acquire|release|status\n  source ats|adzuna|hiring-cafe\n  scan --provider codex|claude [--mode primary|second-pass]\n  schedule install|status|remove|run-now [--time HH:MM] [--provider PROVIDER]`);
+  print(`Scout CLI\n\nCommands:\n  doctor [--workspace PATH]\n  workspace init|migrate [--from PATH] [--to PATH]\n  cv quality <application-slug> [--workspace PATH]\n  lock acquire|release|status\n  source ats|adzuna|hiring-cafe\n  scan --provider codex|claude [--mode primary|second-pass]\n  schedule install|status|remove|run-now [--time HH:MM] [--provider PROVIDER]`);
 }
 
 const isMain = isMainModule(import.meta.url);

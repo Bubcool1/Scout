@@ -7,7 +7,7 @@ Scout is a local-first opportunity finder for Windows, macOS and Linux. It keeps
 Download the Windows installer and its `checksums.txt` from the same GitHub release. Compare the installer SHA-256 hash before running it:
 
 ```powershell
-Get-FileHash .\Scout-0.1.0-beta.8-windows-x64.exe -Algorithm SHA256
+Get-FileHash .\Scout-0.1.0-beta.9-windows-x64.exe -Algorithm SHA256
 ```
 
 The first unsigned beta may trigger Microsoft SmartScreen. A matching checksum proves file integrity, not publisher trust. Scout installs for the current user under `%LOCALAPPDATA%\Programs\Scout` and does not require administrator rights.
@@ -62,6 +62,20 @@ The first-run wizard accepts selectable-text PDF, DOCX, Markdown and plain text 
 Complete the setup interview with your role families, sectors, locations, minimum salary, commute preferences, exclusions and preferred writing tone. See [AI Setup](AI_SETUP.md) for a guided route or [Configuration](CONFIGURATION.md) for manual editing.
 
 Scout uses these approved answers, the imported CV and generated search lanes to find and score jobs. It does not inspect unrelated Codex/Claude conversations or automatically infer a career from previous AI usage.
+
+### Tailor a CV
+
+Choose **Create custom CV** on an opportunity. Scout recommends Google XYZ for genuine achievement bullets and a separate natural-voice review, but both options can be switched off for each CV.
+
+With XYZ enabled, Scout compares the role with confirmed evidence and asks only for missing accomplishment, outcome or method details, one question at a time. Every question can be skipped and the interview can be finished early. Never supply an invented number; a truthful qualitative outcome is valid.
+
+Scout stores the selected options, confirmed answers and bullet provenance in the private application folder. The quality panel shows blocking evidence/rendering failures separately from overridable writing warnings. A CV remains labelled **Draft** until enabled checks pass or you explicitly choose **Use draft anyway**. Any later edit invalidates the prior review or override.
+
+From a source checkout, rerun the same review with:
+
+```powershell
+node tools/scout.mjs cv quality <company-slug> --workspace "$HOME\Documents\Scout Workspace"
+```
 
 ## 5. Add sources
 

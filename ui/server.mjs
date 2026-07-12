@@ -7,6 +7,7 @@ import { isMainModule } from './lib/mainModule.mjs';
 import { triage } from './lib/derive.mjs';
 import { pipeline } from './lib/pipeline.mjs';
 import { listCvFiles, safeCvPath } from './lib/cv.mjs';
+import { cvDownloadDecision, overrideCvQuality, readCvQuality, runCvQuality } from './lib/cvQuality.mjs';
 import { scanHealthFromText } from './lib/scanHealth.mjs';
 import { scheduleStatus, scheduleSummary } from './lib/scheduler.mjs';
 import { loadPortals, portalSummary } from './lib/ats.mjs';
@@ -244,13 +245,25 @@ function handleRead(req, res, url) {
       return sendText(res, 200, 'text/plain; charset=utf-8', fs.readFileSync(abs, 'utf8'));
     } catch (e) { return sendJson(res, 400, { error: e.message }); }
   }
+  if (req.method === 'GET' && url.pathname === '/api/cv/quality') {
+    try { return sendJson(res, 200, readCvQuality(WORKSPACE_ROOT, url.searchParams.get('slug') || '')); }
+    catch (e) { return sendJson(res, 400, { error: e.message }); }
+  }
   if (req.method === 'GET' && url.pathname === '/api/cv/pdf') {
     const slug = url.searchParams.get('slug') || '';
     if (!/^[a-z0-9-]+$/.test(slug)) return sendJson(res, 400, { error: 'bad slug' });
     const pdf = path.join(WORKSPACE_ROOT, 'applications', slug, 'cv.pdf');
     if (!fs.existsSync(pdf)) return sendJson(res, 404, { error: 'no pdf - render first' });
+    if (url.searchParams.get('download') === '1') {
+      let decision;
+      try { decision = cvDownloadDecision(WORKSPACE_ROOT, slug); }
+      catch (e) { return sendJson(res, 400, { error: e.message }); }
+      if (!decision.allowed) return sendJson(res, 409, decision);
+    }
     const buf = fs.readFileSync(pdf);
-    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': buf.length });
+    const headers = { 'Content-Type': 'application/pdf', 'Content-Length': buf.length };
+    if (url.searchParams.get('download') === '1') headers['Content-Disposition'] = `attachment; filename="${slug}-cv.pdf"`;
+    res.writeHead(200, headers);
     return res.end(buf);
   }
   if (req.method === 'GET' && url.pathname === '/api/source') {
@@ -431,6 +444,20 @@ routes['POST /api/cv/render'] = (req, res, body) => {
   const b = parseBody(body); if (!b) return replyJson(res, 400, { error: 'bad json' });
   const r = renderCv(WORKSPACE_ROOT, b.slug || '');
   replyJson(res, 200, r);
+};
+
+routes['POST /api/cv/quality'] = (req, res, body) => {
+  const b = parseBody(body); if (!b) return replyJson(res, 400, { error: 'bad json' });
+  try {
+    const config = loadWorkspaceConfig(WORKSPACE_ROOT);
+    return replyJson(res, 200, runCvQuality(WORKSPACE_ROOT, b.slug || '', { locale: config.locale }));
+  } catch (e) { return replyJson(res, 400, { error: e.message }); }
+};
+
+routes['POST /api/cv/quality/override'] = (req, res, body) => {
+  const b = parseBody(body); if (!b) return replyJson(res, 400, { error: 'bad json' });
+  try { return replyJson(res, 200, overrideCvQuality(WORKSPACE_ROOT, b.slug || '', b.cvSha256 || '')); }
+  catch (e) { return replyJson(res, 409, { error: e.message }); }
 };
 
 import { registerChatRoutes } from './lib/chatService.mjs';

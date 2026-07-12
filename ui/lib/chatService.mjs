@@ -1,11 +1,14 @@
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import {
   loadChat, saveChat, emptyChat, appendMessage, addFilesTouched, recordHandoff,
 } from './chatStore.mjs';
 import { buildClaudeArgs, parseClaudeLine } from './chatClaude.mjs';
 import { buildCodexArgs, parseCodexLine } from './chatCodex.mjs';
 import { runTurn } from './chatRun.mjs';
-import { buildPrefills, HANDOFF_SUMMARY_PROMPT, handoffOpening } from './chatPrompts.mjs';
+import { buildPrefills, HANDOFF_SUMMARY_PROMPT, handoffOpening, slugOf } from './chatPrompts.mjs';
+import { runCvQuality } from './cvQuality.mjs';
 import { readUsage } from './usage.mjs';
 import { loadWorkspaceConfig } from './workspace.mjs';
 import { providerStatus } from './providers.mjs';
@@ -61,6 +64,7 @@ function stopTurnOnDisconnect(req, res, id) {
 
 export function registerChatRoutes({
   routes, repoRoot, readTracker, runTurnFn = runTurn, saveChatFn = saveChat, providerStatusFn = providerStatus,
+  runCvQualityFn = runCvQuality,
 }) {
   function engineBuild(engine, resumeId) {
     const config = loadWorkspaceConfig(repoRoot);
@@ -74,6 +78,23 @@ export function registerChatRoutes({
       return { id, company: 'Scout', role: 'Workspace setup', sources: [], notes: '' };
     }
     return (readTracker().opportunities || []).find((o) => o.id === id) || null;
+  }
+
+  function refreshCvQuality(entry, filesTouched = []) {
+    if (!entry || entry.id === ONBOARDING_CHAT_ID) return [];
+    const slug = slugOf(entry.company);
+    const prefix = `applications/${slug}/`;
+    if (!(filesTouched || []).some((file) => String(file).startsWith(prefix))) return [];
+    const source = path.join(repoRoot, 'applications', slug, 'cv.typ');
+    const evidence = path.join(repoRoot, 'applications', slug, 'cv-evidence.json');
+    if (!fs.existsSync(source) || !fs.existsSync(evidence)) return [];
+    const config = loadWorkspaceConfig(repoRoot);
+    try {
+      runCvQualityFn(repoRoot, slug, { locale: config.locale });
+      return [`applications/${slug}/cv-quality.json`, `applications/${slug}/cv.pdf`];
+    } catch {
+      return [];
+    }
   }
 
   function onboardingPrefill(config) {
@@ -100,12 +121,16 @@ export function registerChatRoutes({
     // but expose an unset engine so the other installed CLI remains selectable.
     const visibleChat = chat && !chat.cliSessionId ? { ...chat, engine: null } : chat;
     const config = loadWorkspaceConfig(repoRoot);
+    const cvOptions = {
+      xyz: url.searchParams.get('xyz') !== '0',
+      humanize: url.searchParams.get('humanize') !== '0',
+    };
     return replyJson(res, 200, {
       exists: !!chat,
       chat: visibleChat,
       prefills: id === ONBOARDING_CHAT_ID
         ? { ask: onboardingPrefill(config), review: 'Review the currently staged onboarding changes. Summarise each proposed change, flag any unsupported claims or missing evidence, and do not activate anything.', approve: 'I have reviewed the staged onboarding changes. Validate them once more, show me the exact files that will be activated, and ask for final confirmation before activation.' }
-        : buildPrefills(entry, { locale: config.locale, tone: config.profile?.tone }),
+        : buildPrefills(entry, { locale: config.locale, tone: config.profile?.tone, cvOptions }),
       busy: running.has(id),
     });
   };
@@ -233,6 +258,7 @@ export function registerChatRoutes({
     appendMessage(chat, 'user', opening, nowIso());
     if (r2.sessionId) chat.cliSessionId = r2.sessionId;
     addFilesTouched(chat, r2.filesTouched);
+    addFilesTouched(chat, refreshCvQuality(entryOf(id), r2.filesTouched));
     if (r2.ok) {
       appendMessage(chat, 'assistant', r2.text, nowIso());
     } else {
@@ -297,6 +323,7 @@ export function registerChatRoutes({
     appendMessage(chat, 'user', text, nowIso());
     if (r.sessionId) chat.cliSessionId = r.sessionId;
     addFilesTouched(chat, r.filesTouched);
+    addFilesTouched(chat, refreshCvQuality(entry, r.filesTouched));
     if (r.ok) {
       appendMessage(chat, 'assistant', r.text, nowIso());
     } else {

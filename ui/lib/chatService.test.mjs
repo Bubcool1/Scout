@@ -88,6 +88,21 @@ function fakeBuild(calls, engine) {
   };
 }
 
+test('chat prefills honour per-CV option query parameters', async () => {
+  const root = tmpRoot();
+  const routes = routeFixture(root);
+  const response = new MockResponse();
+  routes['GET /api/chat'](
+    new EventEmitter(), response, '',
+    new URL(`http://127.0.0.1/api/chat?id=${ID}&xyz=0&humanize=1`),
+  );
+  await response.finished;
+  const body = JSON.parse(response.text());
+  assert.match(body.prefills.cv, /Do not require Google XYZ/);
+  assert.match(body.prefills.cv, /separate natural-voice revision/);
+  assert.match(body.prefills.cv, /xyz=false and humanize=true/);
+});
+
 test('handoff route summarises the old session, starts the other engine, and persists it', { concurrency: false }, async () => {
   const root = tmpRoot();
   const chat = emptyChat('claude');
@@ -255,6 +270,29 @@ test('a failed send preserves emitted session and file metadata for retry', { co
     const saved = loadChat(root, ID);
     assert.equal(saved.cliSessionId, 'failed-session');
     assert.deepEqual(saved.filesTouched, ['applications/acme/partial.typ']);
+  } finally {
+    ENGINES.claude = oldClaude;
+  }
+});
+
+test('a CV writing turn triggers installed-app quality validation when evidence exists', { concurrency: false }, async () => {
+  const root = tmpRoot();
+  const app = path.join(root, 'applications', 'acme');
+  fs.mkdirSync(app, { recursive: true });
+  fs.writeFileSync(path.join(app, 'cv.typ'), '#show: cv.with(name: "Example")\n');
+  fs.writeFileSync(path.join(app, 'cv-evidence.json'), '{"schemaVersion":1}\n');
+  const qualityCalls = [];
+  const oldClaude = ENGINES.claude;
+  ENGINES.claude = { build: fakeBuild([], 'claude'), parse: parseClaudeLine };
+  try {
+    const routes = routeFixture(root, {
+      runCvQualityFn: (repoRoot, slug, options) => qualityCalls.push({ repoRoot, slug, options }),
+    });
+    await callRoute(routes['POST /api/chat/send'], JSON.stringify({ id: ID, engine: 'claude', text: 'hello' }));
+    assert.deepEqual(qualityCalls, [{ repoRoot: root, slug: 'acme', options: { locale: 'en-GB' } }]);
+    const saved = loadChat(root, ID);
+    assert.ok(saved.filesTouched.includes('applications/acme/cv-quality.json'));
+    assert.ok(saved.filesTouched.includes('applications/acme/cv.pdf'));
   } finally {
     ENGINES.claude = oldClaude;
   }

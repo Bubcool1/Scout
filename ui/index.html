@@ -400,6 +400,16 @@
     .cv-chat-request .meta { line-height: 1.45; margin-bottom: 10px; }
     .cv-chat-request-row { display: flex; gap: 8px; align-items: stretch; }
     .cv-chat-request-row input { flex: 1; min-width: 0; padding: 8px 10px; }
+    .cv-quality { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); }
+    .cv-quality.ready { border-color: var(--good); }
+    .cv-quality.draft, .cv-quality.stale, .cv-quality.legacy { border-color: var(--warn); }
+    .cv-quality.invalid { border-color: #d33; }
+    .cv-quality ul { margin: 8px 0; padding-left: 20px; color: var(--muted); font-size: 12px; }
+    .cv-options-overlay { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px; background: rgba(5,8,14,.72); }
+    .cv-options-dialog { width: min(560px, 100%); padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); box-shadow: 0 24px 70px rgba(0,0,0,.45); }
+    .cv-option { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .cv-option input { margin-top: 3px; }
+    .cv-option b { display: block; margin-bottom: 4px; }
     .cv-preview-panel { grid-column: 1 / -1; min-width: 0; }
     .cv-preview-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
     .cv-preview-toolbar > :first-child { margin-right: auto !important; }
@@ -708,8 +718,20 @@
     </div>
   </div>
   <div id="chat-drawer" class="chat-drawer hidden"></div>
+  <div id="cv-options-overlay" class="cv-options-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cv-options-title">
+    <div class="cv-options-dialog">
+      <h2 id="cv-options-title">Build this custom CV</h2>
+      <p class="meta">Scout recommends both options, but they are optional and can be switched off for this CV.</p>
+      <label class="cv-option"><input id="cv-option-xyz" type="checkbox" checked><span><b>Google XYZ <span class="chip">Recommended</span></b><span class="meta">Strengthen genuine achievement bullets with what you accomplished, the confirmed outcome, and how you did it. Scout asks only for missing evidence, one question at a time.</span></span></label>
+      <label class="cv-option"><input id="cv-option-humanize" type="checkbox" checked><span><b>Natural-voice review <span class="chip">Recommended</span></b><span class="meta">Run a separate evidence-preserving rewrite and checks for generic phrasing, repetition, long bullets and locale mismatches.</span></span></label>
+      <div class="controls" style="justify-content:flex-end;margin-top:18px">
+        <button class="act" type="button" onclick="Scout.closeCvOptions()">Cancel</button>
+        <button class="act primary" type="button" onclick="Scout.startCvFromOptions()">Continue to job chat</button>
+      </div>
+    </div>
+  </div>
   <div id="scout-arrival" class="scout-arrival hidden"></div>
-  <script src="/app.js?v=beta-8"></script>
-  <script type="module" src="/setup.js?v=beta-8"></script>
+  <script src="/app.js?v=beta-9"></script>
+  <script type="module" src="/setup.js?v=beta-9"></script>
 </body>
 </html>
