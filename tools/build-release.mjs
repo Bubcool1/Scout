@@ -166,7 +166,12 @@ export function stageRelease({
 // This is intentionally not `go install github.com/wailsapp/wails/...`.
 export function buildWailsHost({ root = DEFAULT_ROOT, output, platform = process.platform } = {}) {
   const target = output || path.join(root, 'dist', 'release', 'stage', platform === 'win32' ? 'Scout.exe' : 'Scout');
-  const result = spawnSync('go', ['build', '-o', target, './cmd/scout-host'], { cwd: path.join(root, 'desktop'), encoding: 'utf8', windowsHide: true });
+  const args = ['build'];
+  // The host is a desktop app, not a console app. Its Windows icon comes from
+  // cmd/scout-host/rsrc_windows_amd64.syso, generated from Scout's favicon.
+  if (platform === 'win32') args.push('-ldflags=-H=windowsgui');
+  args.push('-o', target, './cmd/scout-host');
+  const result = spawnSync('go', args, { cwd: path.join(root, 'desktop'), encoding: 'utf8', windowsHide: true });
   if (result.status !== 0) throw new Error(`Wails host build failed:\n${result.stdout}\n${result.stderr}`);
   return target;
 }

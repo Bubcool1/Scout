@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run ../icon-resource
+
 import (
 	"context"
 	_ "embed"
