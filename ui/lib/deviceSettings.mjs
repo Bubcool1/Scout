@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-export const DEVICE_SETUP_SECTIONS = Object.freeze({ 'launch-at-login': 1 });
+// Keep the established setup-section id for existing workspaces. The Wails host
+// owns cross-platform launch-at-login registration; this legacy UI prompt is the
+// Windows compatibility surface until the host settings bridge replaces it.
+export const DEVICE_SETUP_SECTIONS = Object.freeze({ 'windows-startup': 1 });
 
 export function deviceSettingsPath(env = process.env, platform = process.platform) {
   if (env.SCOUT_DEVICE_SETTINGS) return path.resolve(env.SCOUT_DEVICE_SETTINGS);
